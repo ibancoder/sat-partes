@@ -53,6 +53,14 @@ export default function DetalleParte() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [jornadas, setJornadas] = useState<Jornada[]>([]);
   const [materiales, setMateriales] = useState<Material[]>([]);
+  const [mostrarFormularioMaterial, setMostrarFormularioMaterial] =
+    useState(false);
+  const [descripcionMaterial, setDescripcionMaterial] = useState("");
+  const [cantidadMaterial, setCantidadMaterial] = useState("1");
+  const [unidadMaterial, setUnidadMaterial] = useState("unidad");
+  const [guardandoMaterial, setGuardandoMaterial] = useState(false);
+  const [mensajeMaterial, setMensajeMaterial] = useState("");
+
   const [mostrarFormularioJornada, setMostrarFormularioJornada] =
     useState(false);
   const [fechaJornada, setFechaJornada] = useState(
@@ -191,6 +199,60 @@ export default function DetalleParte() {
       );
     } finally {
       setGuardandoJornada(false);
+    }
+  }
+
+  async function guardarMaterial() {
+    setMensajeMaterial("");
+    setError("");
+
+    const descripcion = descripcionMaterial.trim();
+    const cantidad = Number(cantidadMaterial);
+
+    if (!descripcion) {
+      setMensajeMaterial("Introduce la descripción del material.");
+      return;
+    }
+
+    if (
+      !cantidadMaterial.trim() ||
+      !Number.isFinite(cantidad) ||
+      cantidad <= 0
+    ) {
+      setMensajeMaterial("Introduce una cantidad válida mayor que cero.");
+      return;
+    }
+
+    setGuardandoMaterial(true);
+
+    try {
+      const { data, error: errorInsertar } = await supabase
+        .from("materiales")
+        .insert({
+          parte_id: id,
+          descripcion,
+          cantidad,
+          unidad: unidadMaterial.trim() || null,
+        })
+        .select("id, descripcion, cantidad, unidad")
+        .single();
+
+      if (errorInsertar) throw errorInsertar;
+
+      setMateriales((anteriores) => [...anteriores, data as Material]);
+      setDescripcionMaterial("");
+      setCantidadMaterial("1");
+      setUnidadMaterial("unidad");
+      setMostrarFormularioMaterial(false);
+      setMensajeMaterial("Material guardado correctamente.");
+    } catch (e) {
+      setMensajeMaterial(
+        e instanceof Error
+          ? `No se pudo guardar el material: ${e.message}`
+          : "No se pudo guardar el material.",
+      );
+    } finally {
+      setGuardandoMaterial(false);
     }
   }
 
@@ -427,10 +489,93 @@ export default function DetalleParte() {
             </section>
 
             <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-7">
-              <h3 className="text-lg font-bold">Materiales utilizados</h3>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-bold">Materiales utilizados</h3>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMensajeMaterial("");
+                    setError("");
+                    setMostrarFormularioMaterial((visible) => !visible);
+                  }}
+                  className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
+                >
+                  {mostrarFormularioMaterial ? "Cancelar" : "+ Añadir material"}
+                </button>
+              </div>
+
+              {mensajeMaterial && (
+                <p
+                  role="status"
+                  className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900"
+                >
+                  {mensajeMaterial}
+                </p>
+              )}
+
+              {mostrarFormularioMaterial && (
+                <div className="mt-5 space-y-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
+                  <h4 className="font-semibold">Nuevo material</h4>
+
+                  <label className="block text-sm font-medium">
+                    Descripción *
+                    <input
+                      type="text"
+                      required
+                      value={descripcionMaterial}
+                      onChange={(e) => setDescripcionMaterial(e.target.value)}
+                      placeholder="Ej. Filtro de aire"
+                      className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                    />
+                  </label>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm font-medium">
+                      Cantidad *
+                      <input
+                        type="number"
+                        required
+                        min="0.01"
+                        step="any"
+                        value={cantidadMaterial}
+                        onChange={(e) => setCantidadMaterial(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                      />
+                    </label>
+
+                    <label className="block text-sm font-medium">
+                      Unidad
+                      <select
+                        value={unidadMaterial}
+                        onChange={(e) => setUnidadMaterial(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                      >
+                        <option value="unidad">Unidad</option>
+                        <option value="unidades">Unidades</option>
+                        <option value="m">Metros (m)</option>
+                        <option value="m²">Metros cuadrados (m²)</option>
+                        <option value="kg">Kilogramos (kg)</option>
+                        <option value="l">Litros (l)</option>
+                        <option value="caja">Caja</option>
+                        <option value="lote">Lote</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={guardandoMaterial}
+                    onClick={() => void guardarMaterial()}
+                    className="w-full rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50 sm:w-auto"
+                  >
+                    {guardandoMaterial ? "Guardando..." : "Guardar material"}
+                  </button>
+                </div>
+              )}
 
               {materiales.length === 0 ? (
-                <p className="mt-3 text-sm text-slate-500">
+                <p className="mt-4 text-sm text-slate-500">
                   No se han registrado materiales.
                 </p>
               ) : (
@@ -438,11 +583,13 @@ export default function DetalleParte() {
                   {materiales.map((material) => (
                     <div
                       key={material.id}
-                      className="rounded-xl border border-slate-200 p-4"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
                     >
-                      <p className="font-medium">{material.descripcion}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Cantidad:{" "}
+                      <p className="min-w-0 flex-1 font-medium">
+                        {material.descripcion}
+                      </p>
+
+                      <p className="font-semibold">
                         {Number(material.cantidad).toLocaleString("es-ES")}
                         {material.unidad ? ` ${material.unidad}` : ""}
                       </p>

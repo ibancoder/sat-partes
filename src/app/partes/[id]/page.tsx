@@ -52,7 +52,25 @@ export default function DetalleParte() {
   const [parte, setParte] = useState<ParteDetalle | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [jornadas, setJornadas] = useState<Jornada[]>([]);
+
+  const [jornadaEditando, setJornadaEditando] = useState<
+    string | number | null
+  >(null);
+  const [fechaEdicionJornada, setFechaEdicionJornada] = useState("");
+  const [horasEdicionJornada, setHorasEdicionJornada] = useState("");
+  const [notasEdicionJornada, setNotasEdicionJornada] = useState("");
+  const [guardandoEdicionJornada, setGuardandoEdicionJornada] = useState(false);
+
   const [materiales, setMateriales] = useState<Material[]>([]);
+
+  const [materialEditando, setMaterialEditando] = useState<string | null>(null);
+  const [descripcionEdicionMaterial, setDescripcionEdicionMaterial] =
+    useState("");
+  const [cantidadEdicionMaterial, setCantidadEdicionMaterial] = useState("1");
+  const [unidadEdicionMaterial, setUnidadEdicionMaterial] = useState("unidad");
+  const [guardandoEdicionMaterial, setGuardandoEdicionMaterial] =
+    useState(false);
+
   const [mostrarFormularioMaterial, setMostrarFormularioMaterial] =
     useState(false);
   const [descripcionMaterial, setDescripcionMaterial] = useState("");
@@ -202,6 +220,93 @@ export default function DetalleParte() {
     }
   }
 
+  async function actualizarJornada() {
+    if (jornadaEditando === null) return;
+
+    setError("");
+
+    const horas = Number(horasEdicionJornada);
+
+    if (!fechaEdicionJornada) {
+      setError("Selecciona la fecha de la jornada.");
+      return;
+    }
+
+    if (
+      !horasEdicionJornada.trim() ||
+      !Number.isFinite(horas) ||
+      horas <= 0 ||
+      horas > 24
+    ) {
+      setError("Las horas deben ser mayores que 0 y no superar 24.");
+      return;
+    }
+
+    setGuardandoEdicionJornada(true);
+
+    try {
+      const { data, error: errorActualizar } = await supabase
+        .from("jornadas")
+        .update({
+          fecha: fechaEdicionJornada,
+          horas,
+          notas: notasEdicionJornada.trim() || null,
+        })
+        .eq("id", jornadaEditando)
+        .eq("parte_id", id)
+        .select("id, fecha, horas, notas")
+        .single();
+
+      if (errorActualizar) throw errorActualizar;
+
+      setJornadas((anteriores) =>
+        anteriores
+          .map((jornada) =>
+            jornada.id === data.id ? (data as Jornada) : jornada,
+          )
+          .sort((a, b) => a.fecha.localeCompare(b.fecha)),
+      );
+
+      setJornadaEditando(null);
+      setFechaEdicionJornada("");
+      setHorasEdicionJornada("");
+      setNotasEdicionJornada("");
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `No se pudo actualizar la jornada: ${e.message}`
+          : "No se pudo actualizar la jornada.",
+      );
+    } finally {
+      setGuardandoEdicionJornada(false);
+    }
+  }
+
+  async function eliminarJornada(jornadaId: string | number) {
+    const confirmar = window.confirm(
+      "¿Seguro que quieres eliminar esta jornada? Esta acción no se puede deshacer.",
+    );
+
+    if (!confirmar) return;
+
+    setError("");
+
+    const { error: errorEliminar } = await supabase
+      .from("jornadas")
+      .delete()
+      .eq("id", jornadaId)
+      .eq("parte_id", id);
+
+    if (errorEliminar) {
+      setError(`No se pudo eliminar la jornada: ${errorEliminar.message}`);
+      return;
+    }
+
+    setJornadas((anteriores) =>
+      anteriores.filter((jornada) => jornada.id !== jornadaId),
+    );
+  }
+
   async function guardarMaterial() {
     setMensajeMaterial("");
     setError("");
@@ -254,6 +359,96 @@ export default function DetalleParte() {
     } finally {
       setGuardandoMaterial(false);
     }
+  }
+
+  async function actualizarMaterial(materialId: string) {
+    setError("");
+    setMensajeMaterial("");
+
+    const descripcion = descripcionEdicionMaterial.trim();
+    const cantidad = Number(cantidadEdicionMaterial);
+
+    if (!descripcion) {
+      setMensajeMaterial("Introduce la descripción del material.");
+      return;
+    }
+
+    if (
+      !cantidadEdicionMaterial.trim() ||
+      !Number.isFinite(cantidad) ||
+      cantidad <= 0
+    ) {
+      setMensajeMaterial("Introduce una cantidad válida mayor que cero.");
+      return;
+    }
+
+    setGuardandoEdicionMaterial(true);
+
+    try {
+      const { data, error: errorActualizar } = await supabase
+        .from("materiales")
+        .update({
+          descripcion,
+          cantidad,
+          unidad: unidadEdicionMaterial.trim() || null,
+        })
+        .eq("id", materialId)
+        .eq("parte_id", id)
+        .select("id, descripcion, cantidad, unidad")
+        .single();
+
+      if (errorActualizar) throw errorActualizar;
+
+      setMateriales((anteriores) =>
+        anteriores.map((material) =>
+          material.id === materialId ? (data as Material) : material,
+        ),
+      );
+
+      setMaterialEditando(null);
+      setDescripcionEdicionMaterial("");
+      setCantidadEdicionMaterial("1");
+      setUnidadEdicionMaterial("unidad");
+      setMensajeMaterial("Material actualizado correctamente.");
+    } catch (e) {
+      setMensajeMaterial(
+        e instanceof Error
+          ? `No se pudo actualizar el material: ${e.message}`
+          : "No se pudo actualizar el material.",
+      );
+    } finally {
+      setGuardandoEdicionMaterial(false);
+    }
+  }
+
+  async function eliminarMaterial(materialId: string) {
+    const confirmar = window.confirm(
+      "¿Seguro que quieres eliminar este material? Esta acción no se puede deshacer.",
+    );
+
+    if (!confirmar) return;
+
+    setError("");
+    setMensajeMaterial("");
+
+    const { error: errorEliminar } = await supabase
+      .from("materiales")
+      .delete()
+      .eq("id", materialId)
+      .eq("parte_id", id);
+
+    if (errorEliminar) {
+      setMensajeMaterial(
+        `No se pudo eliminar el material: ${errorEliminar.message}`,
+      );
+      return;
+    }
+
+    setMateriales((anteriores) =>
+      anteriores.filter((material) => material.id !== materialId),
+    );
+
+    setMensajeMaterial("Material eliminado correctamente.");
   }
 
   const totalHoras = jornadas.reduce(
@@ -466,21 +661,122 @@ export default function DetalleParte() {
                       key={jornada.id}
                       className="rounded-xl border border-slate-200 p-4"
                     >
-                      <div className="flex flex-wrap justify-between gap-2">
-                        <p className="font-medium">Día {indice + 1}</p>
-                        <p className="font-semibold">
-                          {Number(jornada.horas).toLocaleString("es-ES")} h
-                        </p>
-                      </div>
+                      {jornadaEditando === jornada.id ? (
+                        <div className="space-y-4">
+                          <h4 className="font-semibold">
+                            Editar jornada {indice + 1}
+                          </h4>
 
-                      <p className="mt-1 text-sm text-slate-600">
-                        {fechaLegible(jornada.fecha)}
-                      </p>
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="block text-sm font-medium">
+                              Fecha *
+                              <input
+                                type="date"
+                                required
+                                value={fechaEdicionJornada}
+                                onChange={(e) =>
+                                  setFechaEdicionJornada(e.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                              />
+                            </label>
 
-                      {jornada.notas && (
-                        <p className="mt-2 whitespace-pre-wrap text-sm">
-                          {jornada.notas}
-                        </p>
+                            <label className="block text-sm font-medium">
+                              Horas trabajadas *
+                              <input
+                                type="number"
+                                required
+                                min="0.25"
+                                max="24"
+                                step="0.25"
+                                value={horasEdicionJornada}
+                                onChange={(e) =>
+                                  setHorasEdicionJornada(e.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                              />
+                            </label>
+                          </div>
+
+                          <label className="block text-sm font-medium">
+                            Observaciones
+                            <textarea
+                              rows={3}
+                              value={notasEdicionJornada}
+                              onChange={(e) =>
+                                setNotasEdicionJornada(e.target.value)
+                              }
+                              className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                            />
+                          </label>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={guardandoEdicionJornada}
+                              onClick={() => void actualizarJornada()}
+                              className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {guardandoEdicionJornada
+                                ? "Guardando..."
+                                : "Guardar cambios"}
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={guardandoEdicionJornada}
+                              onClick={() => setJornadaEditando(null)}
+                              className="rounded-lg border border-slate-300 px-4 py-2 font-semibold hover:bg-slate-50"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap justify-between gap-2">
+                            <p className="font-medium">Día {indice + 1}</p>
+                            <p className="font-semibold">
+                              {Number(jornada.horas).toLocaleString("es-ES")} h
+                            </p>
+                          </div>
+
+                          <p className="mt-1 text-sm text-slate-600">
+                            {fechaLegible(jornada.fecha)}
+                          </p>
+
+                          {jornada.notas && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm">
+                              {jornada.notas}
+                            </p>
+                          )}
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setError("");
+                                setJornadaEditando(jornada.id);
+                                setFechaEdicionJornada(
+                                  jornada.fecha.slice(0, 10),
+                                );
+                                setHorasEdicionJornada(String(jornada.horas));
+                                setNotasEdicionJornada(jornada.notas ?? "");
+                              }}
+                              className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void eliminarJornada(jornada.id)}
+                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}
@@ -583,16 +879,135 @@ export default function DetalleParte() {
                   {materiales.map((material) => (
                     <div
                       key={material.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
+                      className="rounded-xl border border-slate-200 p-4"
                     >
-                      <p className="min-w-0 flex-1 font-medium">
-                        {material.descripcion}
-                      </p>
+                      {materialEditando === material.id ? (
+                        <div className="space-y-4">
+                          <h4 className="font-semibold">Editar material</h4>
 
-                      <p className="font-semibold">
-                        {Number(material.cantidad).toLocaleString("es-ES")}
-                        {material.unidad ? ` ${material.unidad}` : ""}
-                      </p>
+                          <label className="block text-sm font-medium">
+                            Descripción *
+                            <input
+                              type="text"
+                              required
+                              value={descripcionEdicionMaterial}
+                              onChange={(e) =>
+                                setDescripcionEdicionMaterial(e.target.value)
+                              }
+                              className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                            />
+                          </label>
+
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="block text-sm font-medium">
+                              Cantidad *
+                              <input
+                                type="number"
+                                required
+                                min="0.01"
+                                step="any"
+                                value={cantidadEdicionMaterial}
+                                onChange={(e) =>
+                                  setCantidadEdicionMaterial(e.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                              />
+                            </label>
+
+                            <label className="block text-sm font-medium">
+                              Unidad
+                              <select
+                                value={unidadEdicionMaterial}
+                                onChange={(e) =>
+                                  setUnidadEdicionMaterial(e.target.value)
+                                }
+                                className="mt-2 w-full rounded-lg border border-slate-300 bg-white p-3 text-base"
+                              >
+                                <option value="unidad">Unidad</option>
+                                <option value="unidades">Unidades</option>
+                                <option value="m">Metros (m)</option>
+                                <option value="m²">
+                                  Metros cuadrados (m²)
+                                </option>
+                                <option value="kg">Kilogramos (kg)</option>
+                                <option value="l">Litros (l)</option>
+                                <option value="caja">Caja</option>
+                                <option value="lote">Lote</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={guardandoEdicionMaterial}
+                              onClick={() =>
+                                void actualizarMaterial(material.id)
+                              }
+                              className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                            >
+                              {guardandoEdicionMaterial
+                                ? "Guardando..."
+                                : "Guardar cambios"}
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={guardandoEdicionMaterial}
+                              onClick={() => setMaterialEditando(null)}
+                              className="rounded-lg border border-slate-300 px-4 py-2 font-semibold hover:bg-slate-50"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="min-w-0 flex-1 font-medium">
+                              {material.descripcion}
+                            </p>
+
+                            <p className="font-semibold">
+                              {Number(material.cantidad).toLocaleString(
+                                "es-ES",
+                              )}
+                              {material.unidad ? ` ${material.unidad}` : ""}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setError("");
+                                setMensajeMaterial("");
+                                setMaterialEditando(material.id);
+                                setDescripcionEdicionMaterial(
+                                  material.descripcion,
+                                );
+                                setCantidadEdicionMaterial(
+                                  String(material.cantidad),
+                                );
+                                setUnidadEdicionMaterial(
+                                  material.unidad || "unidad",
+                                );
+                              }}
+                              className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void eliminarMaterial(material.id)}
+                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

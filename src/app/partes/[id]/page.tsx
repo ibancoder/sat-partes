@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
+import { generarPartePDF } from "@/lib/generarPartePDF";
+import SignatureCanvas from "react-signature-canvas";
+import { useRef } from "react";
 
 type ParteDetalle = {
   id: string;
@@ -13,6 +16,7 @@ type ParteDetalle = {
   descripcion: string | null;
   estado: string;
   fecha_creacion: string;
+  fecha_cierre: string | null;
   cliente_id: string;
 };
 
@@ -43,9 +47,16 @@ function fechaLegible(fecha: string) {
   return new Date(`${fecha.slice(0, 10)}T12:00:00`).toLocaleDateString("es-ES");
 }
 
-export default function DetalleParte() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+export default function DetalleParte({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const [id, setId] = useState("");
+
+  useEffect(() => {
+    params.then((valores) => setId(valores.id));
+  }, [params]);
 
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +73,16 @@ export default function DetalleParte() {
   const [guardandoEdicionJornada, setGuardandoEdicionJornada] = useState(false);
 
   const [materiales, setMateriales] = useState<Material[]>([]);
+
+  // Referencias a los canvas de firma para el técnico y el cliente
+  const firmaTecnicoRef = useRef<SignatureCanvas | null>(null);
+  const firmaClienteRef = useRef<SignatureCanvas | null>(null);
+
+  const [guardandoFirmas, setGuardandoFirmas] = useState(false);
+  const [mensajeFirmas, setMensajeFirmas] = useState("");
+  const [firmasGuardadas, setFirmasGuardadas] = useState(false);
+
+  //fin referencias a los canvas de firma
 
   const [materialEditando, setMaterialEditando] = useState<string | null>(null);
   const [descripcionEdicionMaterial, setDescripcionEdicionMaterial] =
@@ -81,11 +102,16 @@ export default function DetalleParte() {
 
   const [mostrarFormularioJornada, setMostrarFormularioJornada] =
     useState(false);
-  const [fechaJornada, setFechaJornada] = useState(
-    new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10),
-  );
+  const [fechaJornada, setFechaJornada] = useState("");
+  useEffect(() => {
+    const fecha = new Date();
+    const offset = fecha.getTimezoneOffset();
+
+    setFechaJornada(
+      new Date(fecha.getTime() - offset * 60000).toISOString().slice(0, 10),
+    );
+  }, []);
+
   const [horasJornada, setHorasJornada] = useState("");
   const [notasJornada, setNotasJornada] = useState("");
   const [guardandoJornada, setGuardandoJornada] = useState(false);
@@ -102,7 +128,7 @@ export default function DetalleParte() {
         const { data: datosParte, error: errorParte } = await supabase
           .from("partes")
           .select(
-            "id, numero, tecnico, direccion_intervencion, descripcion, estado, fecha_creacion, cliente_id",
+            "id, numero, tecnico, direccion_intervencion, descripcion, estado, fecha_creacion,fecha_cierre, cliente_id",
           )
           .eq("id", id)
           .single();
@@ -153,7 +179,11 @@ export default function DetalleParte() {
       }
     }
 
-    if (id) void cargarDetalle();
+    if (id) {
+      void cargarDetalle();
+    } else {
+      setCargando(true);
+    }
 
     return () => {
       activo = false;
@@ -451,6 +481,275 @@ export default function DetalleParte() {
     setMensajeMaterial("Material eliminado correctamente.");
   }
 
+  async function guardarFirmas() {
+    setMensajeFirmas("");
+    setError("");
+
+    const firmaTecnico = firmaTecnicoRef.current;
+    const firmaCliente = firmaClienteRef.current;
+
+    if (!firmaTecnico || firmaTecnico.isEmpty()) {
+      setMensajeFirmas("Falta la firma del técnico.");
+      return;
+    }
+
+    if (!firmaCliente || firmaCliente.isEmpty()) {
+      setMensajeFirmas("Falta la firma del cliente.");
+      return;
+    }
+
+    if (!parte) {
+      setMensajeFirmas("No se ha podido cargar el parte.");
+      return;
+    }
+
+    setGuardandoFirmas(true);
+
+    try {
+      const { data: usuarioData, error: errorUsuario } =
+        await supabase.auth.getUser();
+
+      if (errorUsuario) throw errorUsuario;
+
+      const usuario = usuarioData.user;
+
+      if (!usuario) {
+        throw new Error("Debes iniciar sesión para guardar las firmas.");
+      }
+
+      const fechaFirma = new Date().toISOString();
+      const identificador = `${usuario.id}/${id}/${Date.now()}`;
+
+      const imagenTecnico = await new Promise<Blob>((resolve, reject) => {
+        firmaTecnico.getCanvas().toBlob((blob) => {
+          if (blob) resolve(blob);
+          else
+            reject(
+              new Error(
+                "No se pudo generar la imagen de la firma del técnico.",
+              ),
+            );
+        }, "image/png");
+      });
+
+      const imagenCliente = await new Promise<Blob>((resolve, reject) => {
+        firmaCliente.getCanvas().toBlob((blob) => {
+          if (blob) resolve(blob);
+          else
+            reject(
+              new Error(
+                "No se pudo generar la imagen de la firma del cliente.",
+              ),
+            );
+        }, "image/png");
+      });
+
+      const rutaTecnico = `${identificador}-tecnico.png`;
+      const rutaCliente = `${identificador}-cliente.png`;
+
+      const { error: errorSubidaTecnico } = await supabase.storage
+        .from("firmas")
+        .upload(rutaTecnico, imagenTecnico, {
+          contentType: "image/png",
+          upsert: false,
+        });
+
+      if (errorSubidaTecnico) throw errorSubidaTecnico;
+
+      const { error: errorSubidaCliente } = await supabase.storage
+        .from("firmas")
+        .upload(rutaCliente, imagenCliente, {
+          contentType: "image/png",
+          upsert: false,
+        });
+
+      if (errorSubidaCliente) {
+        await supabase.storage.from("firmas").remove([rutaTecnico]);
+        throw errorSubidaCliente;
+      }
+
+      const { error: errorRegistro } = await supabase.from("firmas").upsert(
+        {
+          parte_id: id,
+          ruta_firma_tecnico: rutaTecnico,
+          ruta_firma_cliente: rutaCliente,
+          firmado_at: fechaFirma,
+        },
+        { onConflict: "parte_id" },
+      );
+
+      if (errorRegistro) {
+        await supabase.storage
+          .from("firmas")
+          .remove([rutaTecnico, rutaCliente]);
+        throw errorRegistro;
+      }
+
+      const { error: errorEstado } = await supabase
+        .from("partes")
+        .update({
+          estado: "firmado",
+          fecha_cierre: fechaFirma,
+        })
+        .eq("id", id);
+
+      if (errorEstado) throw errorEstado;
+
+      setParte((anterior) =>
+        anterior ? { ...anterior, estado: "firmado" } : anterior,
+      );
+
+      setFirmasGuardadas(true);
+      setMensajeFirmas("Firmas guardadas correctamente.");
+    } catch (e) {
+      setMensajeFirmas(
+        e instanceof Error
+          ? `No se pudieron guardar las firmas: ${e.message}`
+          : "No se pudieron guardar las firmas.",
+      );
+    } finally {
+      setGuardandoFirmas(false);
+    }
+  }
+
+  async function obtenerPDF(): Promise<Blob> {
+    if (!parte) {
+      throw new Error("No se ha cargado el parte.");
+    }
+
+    // Recuperar las rutas de las firmas guardadas
+    const { data: datosFirmas, error: errorFirmas } = await supabase
+      .from("firmas")
+      .select("ruta_firma_tecnico, ruta_firma_cliente")
+      .eq("parte_id", id)
+      .maybeSingle();
+
+    if (errorFirmas) throw errorFirmas;
+
+    // Descargar las firmas de Supabase
+    async function descargarFirma(ruta: string | null) {
+      if (!ruta) return null;
+
+      const { data, error } = await supabase.storage
+        .from("firmas")
+        .download(ruta);
+
+      if (error) throw error;
+
+      return await new Promise<string>((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => resolve(lector.result as string);
+        lector.onerror = () =>
+          reject(new Error("No se pudo leer una imagen de firma."));
+        lector.readAsDataURL(data);
+      });
+    }
+
+    const [firmaTecnico, firmaCliente] = await Promise.all([
+      descargarFirma(datosFirmas?.ruta_firma_tecnico ?? null),
+      descargarFirma(datosFirmas?.ruta_firma_cliente ?? null),
+    ]);
+
+    // Generar el PDF
+    return generarPartePDF({
+      numero: parte.numero,
+      cliente,
+      direccion_intervencion: parte.direccion_intervencion ?? "",
+      tecnico: parte.tecnico,
+      descripcion: parte.descripcion ?? "",
+      estado:
+        parte.estado === "firmado"
+          ? "Firmado"
+          : parte.estado === "pendiente_firma"
+            ? "Pendiente de firma"
+            : "En curso",
+      fecha_creacion: parte.fecha_creacion,
+      fecha_cierre: parte.fecha_cierre,
+      jornadas,
+      materiales,
+      firmaTecnico,
+      firmaCliente,
+    });
+  }
+
+  async function descargarPDF() {
+    setError("");
+
+    try {
+      const pdfBlob = await obtenerPDF();
+
+      const url = URL.createObjectURL(pdfBlob);
+      const enlace = document.createElement("a");
+
+      enlace.href = url;
+      enlace.download = `Parte-${parte?.numero}.pdf`;
+
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `No se pudo generar el PDF: ${e.message}`
+          : "No se pudo generar el PDF.",
+      );
+    }
+  }
+
+  async function enviarCopiaCliente() {
+    if (!parte || !cliente?.email) {
+      setError("No se ha cargado el parte o el cliente no tiene email.");
+      return;
+    }
+
+    if (parte.estado !== "firmado") {
+      setError("Solo se pueden enviar partes firmados.");
+      return;
+    }
+    setError("");
+    setMensajeFirmas("");
+
+    try {
+      const pdfBlob = await obtenerPDF();
+
+      const formulario = new FormData();
+      formulario.append("parteId", parte.id);
+      formulario.append("pdf", pdfBlob, `Parte-${parte.numero}.pdf`);
+
+      const { data: sesion } = await supabase.auth.getSession();
+      const token = sesion?.session?.access_token;
+
+      if (!token) {
+        throw new Error("No se ha podido obtener el token de sesión.");
+      }
+
+      const respuesta = await fetch("/api/enviar-parte", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formulario,
+      });
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          resultado.error || "No se pudo enviar el parte al cliente.",
+        );
+      }
+      setMensajeFirmas("Parte enviado correctamente al cliente.");
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `No se pudo enviar el parte al cliente: ${e.message}`
+          : "No se pudo enviar el parte al cliente.",
+      );
+    }
+  }
+
   const totalHoras = jornadas.reduce(
     (total, jornada) => total + Number(jornada.horas || 0),
     0,
@@ -462,6 +761,21 @@ export default function DetalleParte() {
           <div>
             <p className="text-sm text-slate-300">Teletecnics - Tube Systems</p>
             <h1 className="text-xl font-bold sm:text-2xl">Detalle del parte</h1>
+            <button
+              type="button"
+              onClick={() => void descargarPDF()}
+              className="mt-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              Generar PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => void enviarCopiaCliente()}
+              disabled={!parte || parte.estado !== "firmado" || !cliente?.email}
+              className="mt-3 ml-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Enviar copia al cliente
+            </button>
           </div>
 
           <Link
@@ -1011,6 +1325,87 @@ export default function DetalleParte() {
                     </div>
                   ))}
                 </div>
+              )}
+            </section>
+
+            <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-7">
+              <h3 className="text-lg font-bold">Firmas de conformidad</h3>
+
+              <p className="mt-2 text-sm text-slate-600">
+                El técnico y el cliente deben firmar para cerrar el parte de
+                trabajo.
+              </p>
+
+              {mensajeFirmas && (
+                <p
+                  role="status"
+                  className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900"
+                >
+                  {mensajeFirmas}
+                </p>
+              )}
+
+              {firmasGuardadas || parte.estado === "firmado" ? (
+                <p className="mt-4 rounded-lg bg-green-50 p-4 font-medium text-green-800">
+                  Este parte figura como firmado.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-5 grid gap-6 md:grid-cols-2">
+                    <div>
+                      <h4 className="mb-2 font-semibold">Firma del técnico</h4>
+                      <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                        <SignatureCanvas
+                          ref={firmaTecnicoRef}
+                          penColor="black"
+                          canvasProps={{
+                            className: "h-44 w-full touch-none",
+                            "aria-label": "Firma del técnico",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => firmaTecnicoRef.current?.clear()}
+                        className="mt-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                      >
+                        Borrar firma del técnico
+                      </button>
+                    </div>
+
+                    <div>
+                      <h4 className="mb-2 font-semibold">Firma del cliente</h4>
+                      <div className="overflow-hidden rounded-xl border border-slate-300 bg-white">
+                        <SignatureCanvas
+                          ref={firmaClienteRef}
+                          penColor="black"
+                          canvasProps={{
+                            className: "h-44 w-full touch-none",
+                            "aria-label": "Firma del cliente",
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => firmaClienteRef.current?.clear()}
+                        className="mt-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                      >
+                        Borrar firma del cliente
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={guardandoFirmas}
+                    onClick={() => void guardarFirmas()}
+                    className="mt-6 w-full rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50 sm:w-auto"
+                  >
+                    {guardandoFirmas
+                      ? "Guardando firmas..."
+                      : "Guardar firmas y cerrar parte"}
+                  </button>
+                </>
               )}
             </section>
 

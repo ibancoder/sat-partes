@@ -45,14 +45,25 @@ export default function Home() {
   const [trabajos, setTrabajos] = useState("");
   const [materiales, setMateriales] = useState("");
   const [jornadas, setJornadas] = useState<Jornada[]>([
-    { id: 1, fecha: fechaHoy(), horas: "" },
+    { id: 1, fecha: "", horas: "" },
   ]);
+
+  useEffect(() => {
+    setJornadas((actuales) =>
+      actuales.map((jornada, indice) =>
+        indice === 0 && !jornada.fecha
+          ? { ...jornada, fecha: fechaHoy() }
+          : jornada,
+      ),
+    );
+  }, []);
 
   const totalHoras = jornadas.reduce(
     (total, j) => total + Math.max(0, Number(j.horas) || 0),
     0,
   );
 
+  //Cargar los partes de la base de datos y sus relaciones (cliente, jornadas y materiales)
   const cargarPartes = useCallback(async () => {
     setCargando(true);
     setError("");

@@ -40,6 +40,7 @@ export default function Home() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [partes, setPartes] = useState<Parte[]>([]);
   const [cliente, setCliente] = useState("");
+  const [clienteEmail, setClienteEmail] = useState("");
   const [direccion, setDireccion] = useState("");
   const [tecnico, setTecnico] = useState("");
   const [trabajos, setTrabajos] = useState("");
@@ -221,6 +222,7 @@ export default function Home() {
 
   function nuevoParte() {
     setCliente("");
+    setClienteEmail("");
     setDireccion("");
     setTecnico("");
     setTrabajos("");
@@ -273,6 +275,7 @@ export default function Home() {
         .from("clientes")
         .insert({
           nombre: cliente.trim(),
+          email: clienteEmail.trim() || null,
           direccion: direccion.trim(),
         })
         .select("id")
@@ -606,6 +609,17 @@ export default function Home() {
                     onChange={(e) => setTecnico(e.target.value)}
                     required
                     placeholder="Nombre del técnico"
+                    className="mt-2 w-full rounded-lg border border-slate-300 p-3 text-base"
+                  />
+                </label>
+
+                <label className="block text-sm font-medium">
+                  Email del cliente
+                  <input
+                    type="email"
+                    value={clienteEmail}
+                    onChange={(e) => setClienteEmail(e.target.value)}
+                    placeholder="correo@cliente.com"
                     className="mt-2 w-full rounded-lg border border-slate-300 p-3 text-base"
                   />
                 </label>

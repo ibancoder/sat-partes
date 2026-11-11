@@ -73,8 +73,8 @@ export function generarPartePDF(parte: PartePDF) {
     110,
     y + 2,
   );
-  pdf.text("Tel. 93 580 87 10 teletecnics@teletecnics.com", 110, y + 7);
-  //pdf.text("teletecnics@teletecnics.com", 110, y + 12);
+  pdf.text("Tel. 93 580 87 10 sat@teletecnics.com", 110, y + 7);
+  //pdf.text("sat@teletecnics.com", 110, y + 12);
 
   y += 21;
   pdf.setDrawColor(0, 105, 175);

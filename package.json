@@ -10,17 +10,19 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "imapflow": "^2.11.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "next": "16.4.2",
+    "nodemailer": "^10.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-signature-canvas": "^1.1.0-alpha.2",
-    "resend": "^6.37.0"
+    "react-signature-canvas": "^1.1.0-alpha.2"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

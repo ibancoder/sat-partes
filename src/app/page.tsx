@@ -31,6 +31,8 @@ function fechaHoy() {
 
 export default function Home() {
   const [sesion, setSesion] = useState(false);
+  const [rol, setRol] = useState<"admin" | "trabajador" | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -180,6 +182,59 @@ export default function Home() {
     };
   }, []);
 
+  // Comprobar el rol del usuario conectado
+  useEffect(() => {
+    let activo = true;
+
+    async function cargarRol() {
+      if (!sesion) {
+        setRol(null);
+        return;
+      }
+
+      const {
+        data: { user },
+        error: errorUsuario,
+      } = await supabase.auth.getUser();
+
+      if (!activo) return;
+
+      if (errorUsuario || !user) {
+        setRol(null);
+        setError("No se ha podido identificar al usuario.");
+        return;
+      }
+
+      const { data, error: errorRol } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!activo) return;
+
+      if (errorRol || !data) {
+        setRol(null);
+        setError("No se ha podido comprobar el rol del usuario.");
+        return;
+      }
+
+      if (data.role !== "admin" && data.role !== "trabajador") {
+        setRol(null);
+        setError("El usuario tiene un rol no válido.");
+        return;
+      }
+
+      setRol(data.role);
+    }
+
+    void cargarRol();
+
+    return () => {
+      activo = false;
+    };
+  }, [sesion]);
+
   // Carga de partes cuando hay sesión activa
   useEffect(() => {
     if (sesion) void cargarPartes();
@@ -217,6 +272,7 @@ export default function Home() {
       setPartes([]);
       setMensaje("");
       setMostrarFormulario(false);
+      setRol(null);
     }
   }
 
@@ -341,6 +397,43 @@ export default function Home() {
     }
   }
 
+  async function eliminarParte(parte: Parte) {
+    if (rol !== "admin") {
+      setError("No tienes permiso para eliminar partes.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `¿Seguro que quieres eliminar el parte ${parte.numero}? Esta acción no se puede deshacer.`,
+    );
+
+    if (!confirmar) return;
+
+    setEliminandoId(parte.id);
+    setError("");
+    setMensaje("");
+
+    try {
+      const { error: errorEliminar } = await supabase
+        .from("partes")
+        .delete()
+        .eq("id", parte.id);
+
+      if (errorEliminar) throw errorEliminar;
+
+      setMensaje(`Parte ${parte.numero} eliminado correctamente.`);
+      await cargarPartes();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `No se pudo eliminar el parte: ${e.message}`
+          : "No se pudo eliminar el parte.",
+      );
+    } finally {
+      setEliminandoId(null);
+    }
+  }
+
   function actualizarJornada(
     id: number,
     campo: "fecha" | "horas",
@@ -451,7 +544,9 @@ export default function Home() {
           <>
             <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-2xl font-bold">Mis partes</h2>
+                <h2 className="text-2xl font-bold">
+                  {rol === "admin" ? "Todos los partes" : "Mis partes"}
+                </h2>
                 <p className="mt-1 text-slate-600">
                   Partes guardados en la base de datos.
                 </p>
@@ -534,6 +629,17 @@ export default function Home() {
                         >
                           Ver detalle
                         </Link>
+                        {rol === "admin" && (
+                          <button
+                            onClick={() => void eliminarParte(parte)}
+                            disabled={eliminandoId === parte.id}
+                            className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {eliminandoId === parte.id
+                              ? "Eliminando..."
+                              : "Eliminar parte"}
+                          </button>
+                        )}
                         <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
                           {parte.estado === "en_curso"
                             ? "En curso"

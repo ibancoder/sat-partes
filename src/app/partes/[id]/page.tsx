@@ -10,6 +10,7 @@ import { useRef } from "react";
 
 type ParteDetalle = {
   id: string;
+  owner_id: string;
   numero: string;
   tecnico: string;
   direccion_intervencion: string | null;
@@ -128,7 +129,7 @@ export default function DetalleParte({
         const { data: datosParte, error: errorParte } = await supabase
           .from("partes")
           .select(
-            "id, numero, tecnico, direccion_intervencion, descripcion, estado, fecha_creacion,fecha_cierre, cliente_id",
+            "id, owner_id,numero, tecnico, direccion_intervencion, descripcion, estado, fecha_creacion,fecha_cierre, cliente_id",
           )
           .eq("id", id)
           .single();
@@ -212,6 +213,10 @@ export default function DetalleParte({
       );
       return;
     }
+    if (!parte) {
+      setMensajeJornada("No se ha podido cargar el parte.");
+      return;
+    }
 
     setGuardandoJornada(true);
 
@@ -220,6 +225,7 @@ export default function DetalleParte({
         .from("jornadas")
         .insert({
           parte_id: id,
+          owner_id: parte.owner_id,
           fecha: fechaJornada,
           horas,
           notas: notasJornada.trim() || null,
@@ -358,6 +364,11 @@ export default function DetalleParte({
       return;
     }
 
+    if (!parte) {
+      setMensajeMaterial("No se ha podido cargar el parte.");
+      return;
+    }
+
     setGuardandoMaterial(true);
 
     try {
@@ -365,6 +376,7 @@ export default function DetalleParte({
         .from("materiales")
         .insert({
           parte_id: id,
+          owner_id: parte.owner_id,
           descripcion,
           cantidad,
           unidad: unidadMaterial.trim() || null,
@@ -518,7 +530,7 @@ export default function DetalleParte({
       }
 
       const fechaFirma = new Date().toISOString();
-      const identificador = `${usuario.id}/${id}/${Date.now()}`;
+      const identificador = `${parte.owner_id}/${id}/${Date.now()}`;
 
       const imagenTecnico = await new Promise<Blob>((resolve, reject) => {
         firmaTecnico.getCanvas().toBlob((blob) => {
@@ -571,6 +583,7 @@ export default function DetalleParte({
       const { error: errorRegistro } = await supabase.from("firmas").upsert(
         {
           parte_id: id,
+          owner_id: parte.owner_id,
           ruta_firma_tecnico: rutaTecnico,
           ruta_firma_cliente: rutaCliente,
           firmado_at: fechaFirma,

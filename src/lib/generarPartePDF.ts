@@ -58,13 +58,16 @@ export function generarPartePDF(parte: PartePDF) {
 
   // Encabezado
   pdf.setTextColor(...azul);
-  pdf.setFont("helvetica", "bold");
+  pdf.setDrawColor(67, 137, 206);
+  pdf.setLineWidth(0.4);
+  pdf.setFont("helvetica", "bolditalic");
   pdf.setFontSize(23);
-  pdf.text("TELETECNICS S.L.", margen, y + 5);
-
+  pdf.text("TELETECNICS S.L.", margen, y + 5, {
+    renderingMode: "stroke",
+  });
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "italic");
-  pdf.text("Tecnología del Transporte Interior", margen, y + 11);
+  pdf.text("Tube Systems Since 1983", margen, y + 11);
 
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(8);

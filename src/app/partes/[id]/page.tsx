@@ -192,6 +192,10 @@ export default function DetalleParte({
   }, [id]);
 
   async function guardarJornada() {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
     setMensajeJornada("");
     setError("");
 
@@ -257,6 +261,10 @@ export default function DetalleParte({
   }
 
   async function actualizarJornada() {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
     if (jornadaEditando === null) return;
 
     setError("");
@@ -319,6 +327,10 @@ export default function DetalleParte({
   }
 
   async function eliminarJornada(jornadaId: string | number) {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
     const confirmar = window.confirm(
       "¿Seguro que quieres eliminar esta jornada? Esta acción no se puede deshacer.",
     );
@@ -344,6 +356,10 @@ export default function DetalleParte({
   }
 
   async function guardarMaterial() {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
     setMensajeMaterial("");
     setError("");
 
@@ -404,6 +420,10 @@ export default function DetalleParte({
   }
 
   async function actualizarMaterial(materialId: string) {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
     setError("");
     setMensajeMaterial("");
 
@@ -464,6 +484,11 @@ export default function DetalleParte({
   }
 
   async function eliminarMaterial(materialId: string) {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
+
     const confirmar = window.confirm(
       "¿Seguro que quieres eliminar este material? Esta acción no se puede deshacer.",
     );
@@ -762,7 +787,7 @@ export default function DetalleParte({
       );
     }
   }
-
+  const parteFirmado = parte?.estado === "firmado";
   const totalHoras = jornadas.reduce(
     (total, jornada) => total + Number(jornada.horas || 0),
     0,
@@ -841,6 +866,18 @@ export default function DetalleParte({
                         : parte.estado}
                 </span>
               </div>
+              {parteFirmado && (
+                <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4">
+                  <p className="font-semibold text-green-800">
+                    Parte cerrado y firmado
+                  </p>
+                  <p className="mt-1 text-sm text-green-700">
+                    Este documento ha sido firmado por el técnico y el cliente.
+                    Su contenido está bloqueado y solo se permite su consulta,
+                    descarga y envío.
+                  </p>
+                </div>
+              )}
 
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <div>
@@ -900,17 +937,21 @@ export default function DetalleParte({
                     {totalHoras.toLocaleString("es-ES")} h en total
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMensajeJornada("");
-                      setError("");
-                      setMostrarFormularioJornada((visible) => !visible);
-                    }}
-                    className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
-                  >
-                    {mostrarFormularioJornada ? "Cancelar" : "+ Añadir jornada"}
-                  </button>
+                  {!parteFirmado && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMensajeJornada("");
+                        setError("");
+                        setMostrarFormularioJornada((visible) => !visible);
+                      }}
+                      className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
+                    >
+                      {mostrarFormularioJornada
+                        ? "Cancelar"
+                        : "+ Añadir jornada"}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -923,7 +964,7 @@ export default function DetalleParte({
                 </p>
               )}
 
-              {mostrarFormularioJornada && (
+              {!parteFirmado && mostrarFormularioJornada && (
                 <div className="mt-5 space-y-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
                   <h4 className="font-semibold">Nueva visita</h4>
 
@@ -1078,31 +1119,33 @@ export default function DetalleParte({
                             </p>
                           )}
 
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError("");
-                                setJornadaEditando(jornada.id);
-                                setFechaEdicionJornada(
-                                  jornada.fecha.slice(0, 10),
-                                );
-                                setHorasEdicionJornada(String(jornada.horas));
-                                setNotasEdicionJornada(jornada.notas ?? "");
-                              }}
-                              className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
-                            >
-                              Editar
-                            </button>
+                          {!parteFirmado && (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setError("");
+                                  setJornadaEditando(jornada.id);
+                                  setFechaEdicionJornada(
+                                    jornada.fecha.slice(0, 10),
+                                  );
+                                  setHorasEdicionJornada(String(jornada.horas));
+                                  setNotasEdicionJornada(jornada.notas ?? "");
+                                }}
+                                className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                              >
+                                Editar
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => void eliminarJornada(jornada.id)}
-                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
-                            >
-                              Eliminar
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() => void eliminarJornada(jornada.id)}
+                                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -1115,17 +1158,21 @@ export default function DetalleParte({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-lg font-bold">Materiales utilizados</h3>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMensajeMaterial("");
-                    setError("");
-                    setMostrarFormularioMaterial((visible) => !visible);
-                  }}
-                  className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
-                >
-                  {mostrarFormularioMaterial ? "Cancelar" : "+ Añadir material"}
-                </button>
+                {!parteFirmado && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMensajeMaterial("");
+                      setError("");
+                      setMostrarFormularioMaterial((visible) => !visible);
+                    }}
+                    className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800"
+                  >
+                    {mostrarFormularioMaterial
+                      ? "Cancelar"
+                      : "+ Añadir material"}
+                  </button>
+                )}
               </div>
 
               {mensajeMaterial && (
@@ -1137,7 +1184,7 @@ export default function DetalleParte({
                 </p>
               )}
 
-              {mostrarFormularioMaterial && (
+              {!parteFirmado && mostrarFormularioMaterial && (
                 <div className="mt-5 space-y-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4">
                   <h4 className="font-semibold">Nuevo material</h4>
 
@@ -1181,7 +1228,6 @@ export default function DetalleParte({
                         <option value="kg">Kilogramos (kg)</option>
                         <option value="l">Litros (l)</option>
                         <option value="caja">Caja</option>
-                        <option value="lote">Lote</option>
                       </select>
                     </label>
                   </div>
@@ -1259,7 +1305,6 @@ export default function DetalleParte({
                                 <option value="kg">Kilogramos (kg)</option>
                                 <option value="l">Litros (l)</option>
                                 <option value="caja">Caja</option>
-                                <option value="lote">Lote</option>
                               </select>
                             </label>
                           </div>
@@ -1302,37 +1347,40 @@ export default function DetalleParte({
                               {material.unidad ? ` ${material.unidad}` : ""}
                             </p>
                           </div>
+                          {!parteFirmado && (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setError("");
+                                  setMensajeMaterial("");
+                                  setMaterialEditando(material.id);
+                                  setDescripcionEdicionMaterial(
+                                    material.descripcion,
+                                  );
+                                  setCantidadEdicionMaterial(
+                                    String(material.cantidad),
+                                  );
+                                  setUnidadEdicionMaterial(
+                                    material.unidad || "unidad",
+                                  );
+                                }}
+                                className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+                              >
+                                Editar
+                              </button>
 
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setError("");
-                                setMensajeMaterial("");
-                                setMaterialEditando(material.id);
-                                setDescripcionEdicionMaterial(
-                                  material.descripcion,
-                                );
-                                setCantidadEdicionMaterial(
-                                  String(material.cantidad),
-                                );
-                                setUnidadEdicionMaterial(
-                                  material.unidad || "unidad",
-                                );
-                              }}
-                              className="rounded-lg border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
-                            >
-                              Editar
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => void eliminarMaterial(material.id)}
-                              className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
-                            >
-                              Eliminar
-                            </button>
-                          </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void eliminarMaterial(material.id)
+                                }
+                                className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

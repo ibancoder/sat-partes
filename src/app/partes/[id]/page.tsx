@@ -519,6 +519,11 @@ export default function DetalleParte({
   }
 
   async function guardarFirmas() {
+    if (parteFirmado) {
+      setError("Este parte está firmado y no admite modificaciones.");
+      return;
+    }
+
     setMensajeFirmas("");
     setError("");
 
